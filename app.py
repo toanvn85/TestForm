@@ -1,20 +1,11 @@
 import streamlit as st
-st.set_page_config(page_title="Bài kiểm tra đào tạo ISO 50001:2018", layout="wide")
+st.set_page_config(page_title="Ứng dụng Trắc nghiệm", layout="wide")
 
 import pandas as pd, gspread, hashlib, time, os, re
 from datetime import datetime
 from google.oauth2.service_account import Credentials
 import plotly.express as px
 from PIL import Image
-# Import libraries for export functionality
-import io
-import base64
-from reportlab.lib.pagesizes import letter, A4
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch, cm
-import xlsxwriter
 
 # ------------ Cấu hình logo 2×3 cm ~ 76×113 px ------------
 LOGO_WIDTH, LOGO_HEIGHT = int(3/2.54*96), int(3/2.54*96)
@@ -160,300 +151,7 @@ sheet_name = lambda em: re.sub(r'[^A-Za-z0-9_-]','_',em)[:100]
 def reset_admin_pw():
     hashed = hash_pw("admin123")
     gws()["admin"].update("B2", [[hashed]])
-    st.success("Đã thiết lập lại mật khẩu Admin về **default**")
-
-# ------------ Export Functions ------------
-def generate_excel(df, sheet_name="Data"):
-    """Generate Excel file from DataFrame with proper styling"""
-    output = io.BytesIO()
-    
-    # Create a workbook and add a worksheet
-    workbook = xlsxwriter.Workbook(output, {'in_memory': True})
-    worksheet = workbook.add_worksheet(sheet_name)
-    
-    # Add formats
-    header_format = workbook.add_format({
-        'bold': True,
-        'bg_color': '#D9EAD3',
-        'border': 1,
-        'text_wrap': True,
-        'valign': 'vcenter',
-        'align': 'center'
-    })
-    
-    cell_format = workbook.add_format({
-        'border': 1,
-        'text_wrap': True,
-        'valign': 'vcenter',
-        'align': 'left'
-    })
-    
-    correct_format = workbook.add_format({
-        'border': 1,
-        'text_wrap': True,
-        'valign': 'vcenter',
-        'align': 'left',
-        'bg_color': '#E2EFDA'
-    })
-    
-    incorrect_format = workbook.add_format({
-        'border': 1,
-        'text_wrap': True,
-        'valign': 'vcenter',
-        'align': 'left',
-        'bg_color': '#FCE4D6'
-    })
-
-    # Write the column headers
-    for col_num, column in enumerate(df.columns):
-        worksheet.write(0, col_num, column, header_format)
-        worksheet.set_column(col_num, col_num, 15)
-    
-    # Write the data with conditional formatting
-    for row_num, row in enumerate(df.values):
-        for col_num, cell_value in enumerate(row):
-            if 'ok' in df.columns and col_num == list(df.columns).index('ok'):
-                if str(cell_value).lower() == 'true':
-                    worksheet.write(row_num + 1, col_num, cell_value, correct_format)
-                else:
-                    worksheet.write(row_num + 1, col_num, cell_value, incorrect_format)
-            else:
-                worksheet.write(row_num + 1, col_num, cell_value, cell_format)
-    
-    # Auto-fit columns
-    for col_num, column in enumerate(df.columns):
-        max_len = max([len(str(value)) for value in df[column].values] + [len(column)]) + 2
-        worksheet.set_column(col_num, col_num, min(max_len, 30))
-    
-    workbook.close()
-    output.seek(0)
-    
-    return output
-
-def generate_pdf(df, title="Data Export", email=None):
-    """Generate PDF report from DataFrame with proper formatting"""
-    buffer = io.BytesIO()
-    
-    # Create the PDF document
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=A4,
-        rightMargin=72,
-        leftMargin=72,
-        topMargin=72,
-        bottomMargin=72
-    )
-    
-    # Container for elements to be added to the PDF
-    elements = []
-    
-    # Define styles
-    styles = getSampleStyleSheet()
-    title_style = styles['Title']
-    heading_style = styles['Heading2']
-    normal_style = styles['Normal']
-    
-    # Add title
-    elements.append(Paragraph(title, title_style))
-    elements.append(Spacer(1, 12))
-    
-    if email:
-        elements.append(Paragraph(f"Email: {email}", heading_style))
-        elements.append(Spacer(1, 12))
-    
-    # Add timestamp
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    elements.append(Paragraph(f"Generated on: {current_time}", normal_style))
-    elements.append(Spacer(1, 24))
-    
-    # Add summary statistics if available
-    if not df.empty:
-        if all(col in df.columns for col in ['ok', 'score']):
-            total_questions = len(df)
-            correct_answers = (df['ok'] == 'True').sum()
-            total_score = sum(pd.to_numeric(df['score'], errors='coerce').fillna(0))
-            
-            elements.append(Paragraph("Summary Statistics:", heading_style))
-            elements.append(Paragraph(f"Total Questions Answered: {total_questions}", normal_style))
-            elements.append(Paragraph(f"Correct Answers: {correct_answers}", normal_style))
-            elements.append(Paragraph(f"Total Score: {total_score}", normal_style))
-            accuracy = (correct_answers/total_questions*100) if total_questions > 0 else 0
-            elements.append(Paragraph(f"Accuracy: {accuracy:.1f}%", normal_style))
-            elements.append(Spacer(1, 24))
-    
-    # Create table data
-    data = [df.columns.tolist()]
-    for _, row in df.iterrows():
-        data.append([str(cell) for cell in row])
-    
-    # Create the table
-    if data:
-        table = Table(data, repeatRows=1)
-        
-        # Add table style
-        table_style = TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgreen),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 12),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-            ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
-            ('ALIGN', (0, 1), (-1, -1), 'LEFT'),
-            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -1), 10),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ])
-        
-        # Add conditional formatting for 'ok' column if it exists
-        if 'ok' in df.columns:
-            ok_col_idx = df.columns.get_loc('ok')
-            for row_idx, row in enumerate(data[1:], 1):
-                if row[ok_col_idx].lower() == 'true':
-                    table_style.add('BACKGROUND', (0, row_idx), (-1, row_idx), colors.lightgreen)
-                else:
-                    table_style.add('BACKGROUND', (0, row_idx), (-1, row_idx), colors.lightsalmon)
-        
-        table.setStyle(table_style)
-        elements.append(table)
-    
-    # Build the PDF document
-    doc.build(elements)
-    buffer.seek(0)
-    return buffer
-
-def get_download_link(buffer, filename, text):
-    """Generate a download link for a file"""
-    b64 = base64.b64encode(buffer.read()).decode()
-    href = f'<a href="data:application/octet-stream;base64,{b64}" download="{filename}">{text}</a>'
-    return href
-
-# ------------ Export Helper Functions ------------
-def add_export_buttons(my_df, email=None):
-    """Add export buttons to the sidebar"""
-    st.sidebar.markdown("### Export Options")
-    
-    if my_df.empty:
-        st.sidebar.info("No data available to export")
-        return
-    
-    col1, col2 = st.sidebar.columns(2)
-    
-    # Excel export
-    if col1.button("📊 Export to Excel"):
-        with st.spinner("Generating Excel file..."):
-            try:
-                excel_buffer = generate_excel(my_df, sheet_name=f"Results_{email}")
-                st.sidebar.markdown(
-                    get_download_link(excel_buffer, f"results_{email.split('@')[0]}.xlsx", "📥 Download Excel"),
-                    unsafe_allow_html=True
-                )
-                st.sidebar.success("Excel file generated successfully!")
-            except Exception as e:
-                st.sidebar.error(f"Error generating Excel file: {e}")
-    
-    # PDF export
-    if col2.button("📄 Export to PDF"):
-        with st.spinner("Generating PDF file..."):
-            try:
-                pdf_buffer = generate_pdf(my_df, title="Quiz Results Report", email=email)
-                st.sidebar.markdown(
-                    get_download_link(pdf_buffer, f"results_{email.split('@')[0]}.pdf", "📥 Download PDF"),
-                    unsafe_allow_html=True
-                )
-                st.sidebar.success("PDF file generated successfully!")
-            except Exception as e:
-                st.sidebar.error(f"Error generating PDF file: {e}")
-
-def add_admin_export_buttons(stats_df):
-    """Add export buttons for admin statistics"""
-    st.sidebar.markdown("### Export Options")
-    
-    if stats_df.empty:
-        st.sidebar.info("No data available to export")
-        return
-    
-    col1, col2 = st.sidebar.columns(2)
-    
-    # Excel export
-    if col1.button("📊 Export Statistics to Excel"):
-        with st.spinner("Generating Excel file..."):
-            try:
-                excel_buffer = generate_excel(stats_df, sheet_name="Participant_Statistics")
-                st.sidebar.markdown(
-                    get_download_link(excel_buffer, "participant_statistics.xlsx", "📥 Download Excel"),
-                    unsafe_allow_html=True
-                )
-                st.sidebar.success("Excel file generated successfully!")
-            except Exception as e:
-                st.sidebar.error(f"Error generating Excel file: {e}")
-    
-    # PDF export
-    if col2.button("📄 Export Statistics to PDF"):
-        with st.spinner("Generating PDF file..."):
-            try:
-                pdf_buffer = generate_pdf(stats_df, title="Participant Statistics Report")
-                st.sidebar.markdown(
-                    get_download_link(pdf_buffer, "participant_statistics.pdf", "📥 Download PDF"),
-                    unsafe_allow_html=True
-                )
-                st.sidebar.success("PDF file generated successfully!")
-            except Exception as e:
-                st.sidebar.error(f"Error generating PDF file: {e}")
-
-def admin_export_participant_results():
-    """Allow admin to export results for a specific participant"""
-    st.sidebar.markdown("### Export Participant Results")
-    
-    # Get all participant emails
-    rd = df_responses()
-    if rd.empty or "email" not in rd.columns:
-        st.sidebar.info("No participant data available")
-        return
-    
-    # Get unique emails
-    emails = rd["email"].unique().tolist()
-    
-    # Email selection dropdown
-    selected_email = st.sidebar.selectbox(
-        "Select participant",
-        options=emails,
-        format_func=lambda x: x
-    )
-    
-    if selected_email:
-        # Get participant's responses
-        participant_data = rd[rd["email"] == selected_email]
-        
-        col1, col2 = st.sidebar.columns(2)
-        
-        # Excel export
-        if col1.button("📊 Export to Excel", key="admin_excel"):
-            with st.spinner("Generating Excel file..."):
-                try:
-                    excel_buffer = generate_excel(participant_data, sheet_name=f"Results_{selected_email}")
-                    st.sidebar.markdown(
-                        get_download_link(excel_buffer, f"results_{selected_email.split('@')[0]}.xlsx", "📥 Download Excel"),
-                        unsafe_allow_html=True
-                    )
-                    st.sidebar.success("Excel file generated successfully!")
-                except Exception as e:
-                    st.sidebar.error(f"Error generating Excel file: {e}")
-        
-        # PDF export
-        if col2.button("📄 Export to PDF", key="admin_pdf"):
-            with st.spinner("Generating PDF file..."):
-                try:
-                    pdf_buffer = generate_pdf(participant_data, title="Participant Results Report", email=selected_email)
-                    st.sidebar.markdown(
-                        get_download_link(pdf_buffer, f"results_{selected_email.split('@')[0]}.pdf", "📥 Download PDF"),
-                        unsafe_allow_html=True
-                    )
-                    st.sidebar.success("PDF file generated successfully!")
-                except Exception as e:
-                    st.sidebar.error(f"Error generating PDF file: {e}")
+    st.success("Đã thiết lập lại mật khẩu Admin về **admin123**")
 
 # ============ Trang Đăng nhập / Đăng ký ============
 def page_login():
@@ -602,7 +300,6 @@ def page_admin():
                 st.session_state["add_mode"]=True; st.rerun()
 
     # Thống kê
-   # Thống kê (continued)
     with tab_s:
         qd = df_questions(); rd = df_responses()
         if rd.empty:
@@ -623,13 +320,6 @@ def page_admin():
             )
             stt["Chưa_trả_lời"] = tot - stt.Đã_trả_lời
             stt["Tỷ_lệ"]       = (stt.Đúng/stt.Đã_trả_lời*100).round(1)
-            
-            # Add export buttons for the statistics
-            add_admin_export_buttons(stt)
-            
-            # Add ability to export individual participant results
-            admin_export_participant_results()
-            
             st.subheader("Thống kê Thí sinh")
             st.dataframe(stt)
             st.plotly_chart(
@@ -651,7 +341,8 @@ def page_admin():
             else:
                 gws()["admin"].update("B2", [[hash_pw(new1)]])
                 st.success("Đổi mật khẩu thành công")
-                # ============ Trang Thí sinh ============
+
+# ============ Trang Thí sinh ============
 def page_part():
     display_logos()
     st.title(f"Chào bạn, {st.session_state.email}")
@@ -729,10 +420,6 @@ def page_part():
         raw=usht.get_all_values()[1:]
         rows=[r[:5]+[""]*(5-len(r)) for r in raw]
         my=pd.DataFrame(rows, columns=["timestamp","qid","sel","ok","score"])
-        
-        # Add export buttons for the user's results
-        add_export_buttons(my, email=st.session_state.email)
-        
         if my.empty:
             st.info("Bạn chưa làm câu hỏi nào.")
         else:
@@ -781,4 +468,3 @@ def main():
 
 if __name__=="__main__":
     main()
-                                
