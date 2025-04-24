@@ -1,5 +1,5 @@
 import streamlit as st
-st.set_page_config(page_title="Ứng dụng Trắc nghiệm", layout="wide")
+st.set_page_config(page_title="App kiểm tra học viên khóa ISO 50001", layout="wide")
 
 import pandas as pd, gspread, hashlib, time, os, re
 from datetime import datetime
