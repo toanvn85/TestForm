@@ -1,6 +1,12 @@
 streamlit
 pandas
 gspread
+hashlib
+time
+os
+re
+io
+base64
 google-auth
 google-auth-oauthlib
 google-auth-httplib2
