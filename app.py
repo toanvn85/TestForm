@@ -10,35 +10,39 @@ from PIL import Image, UnidentifiedImageError
 # ------------ Cấu hình logo 2×3 cm ~ 76×113 px ------------
 LOGO_WIDTH, LOGO_HEIGHT = 150, 150
 SUPPORTED_FORMATS = ("png", "jpg", "jpeg", "gif")
-MAX_FILE_SIZE_MB = 5  # Set maximum file size limit (in MB)
 
 def display_logos():
-    """Allow user file uploads, check for errors, and display logos."""
-    uploaded_file = st.file_uploader("Upload your logo", type=SUPPORTED_FORMATS)
+    """Cho phép tải lên 03 logo và hiển thị chúng trên giao diện."""
+    st.title("Upload 03 Logos")
+    placeholder = st.empty()  # Khung để chứa uploader
 
-    if uploaded_file is not None:
+    # Sử dụng placeholder để tạo uploader cho 03 file
+    with placeholder.container():
+        col1, col2, col3 = st.columns(3)
+        uploaded_files = []
+        uploaded_files.append(col1.file_uploader("Logo 1", type=SUPPORTED_FORMATS, key="file1"))
+        uploaded_files.append(col2.file_uploader("Logo 2", type=SUPPORTED_FORMATS, key="file2"))
+        uploaded_files.append(col3.file_uploader("Logo 3", type=SUPPORTED_FORMATS, key="file3"))
+
+    # Kiểm tra nếu cả 03 logo đã được tải lên
+    if all(uploaded_files):
         try:
-            # Check file size
-            uploaded_file.seek(0, os.SEEK_END)
-            file_size_mb = uploaded_file.tell() / (1024 * 1024)  # Convert to MB
-            uploaded_file.seek(0)  # Reset file pointer for reading
-            if file_size_mb > MAX_FILE_SIZE_MB:
-                st.error(f"File size exceeds the limit of {MAX_FILE_SIZE_MB} MB.")
-                return
+            cols = st.columns(3)  # Tạo các cột để hiển thị logo
+            for i, uploaded_file in enumerate(uploaded_files):
+                # Mở và kiểm tra logo
+                img = Image.open(uploaded_file).resize((LOGO_WIDTH, LOGO_HEIGHT))
+                cols[i].image(img, caption=f"Logo {i + 1}")
 
-            # Open and validate image
-            img = Image.open(uploaded_file)
-            img = img.resize((LOGO_WIDTH, LOGO_HEIGHT))
-
-            # Display image
-            st.image(img, caption=f"Uploaded: {uploaded_file.name}")
-
-        except UnidentifiedImageError:
-            st.error("The uploaded file is not a valid image.")
+            # Ẩn uploader sau khi hoàn thành
+            placeholder.empty()
+            st.success("All logos uploaded successfully!")
+        
         except Exception as e:
-            st.error(f"An unexpected error occurred: {e}")
+            st.error(f"An error occurred: {e}")
+
     else:
-        st.warning("Please upload a file to continue.")
+        st.warning("Please upload all 03 logos.")
+
 
 # ------------ Thiết lập Google Sheets ------------
 SCOPE = ["https://www.googleapis.com/auth/spreadsheets",
