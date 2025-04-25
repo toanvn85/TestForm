@@ -13,16 +13,16 @@ SUPPORTED_FORMATS = ("png", "jpg", "jpeg", "gif")
 
 def display_logos():
     """Cho phép tải lên 03 logo và hiển thị chúng trên giao diện."""
-    st.title("Upload 03 Logos")
+    st.title("TUV NORD ONSITE APP")
     placeholder = st.empty()  # Khung để chứa uploader
 
     # Sử dụng placeholder để tạo uploader cho 03 file
     with placeholder.container():
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4, col5 = st.columns(5)
         uploaded_files = []
         uploaded_files.append(col1.file_uploader("Logo 1", type=SUPPORTED_FORMATS, key="file1"))
-        uploaded_files.append(col2.file_uploader("Logo 2", type=SUPPORTED_FORMATS, key="file2"))
-        uploaded_files.append(col3.file_uploader("Logo 3", type=SUPPORTED_FORMATS, key="file3"))
+        uploaded_files.append(col3.file_uploader("Logo 2", type=SUPPORTED_FORMATS, key="file2"))
+        uploaded_files.append(col5.file_uploader("Logo 3", type=SUPPORTED_FORMATS, key="file3"))
 
     # Kiểm tra nếu cả 03 logo đã được tải lên
     if all(uploaded_files):
