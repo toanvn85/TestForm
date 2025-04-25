@@ -5,28 +5,40 @@ import pandas as pd, gspread, hashlib, time, os, re
 from datetime import datetime
 from google.oauth2.service_account import Credentials
 import plotly.express as px
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 
 # ------------ Cấu hình logo 2×3 cm ~ 76×113 px ------------
-LOGO_WIDTH, LOGO_HEIGHT = int(3/2.54*96), int(3/2.54*96)
+LOGO_WIDTH, LOGO_HEIGHT = 150, 150
+SUPPORTED_FORMATS = ("png", "jpg", "jpeg", "gif")
+MAX_FILE_SIZE_MB = 5  # Set maximum file size limit (in MB)
+
 def display_logos():
-    """Tự động tìm và hiển thị logo1.* và logo2.* với đa định dạng."""
-    c1, c2, c3, c4, c5 = st.columns(5)
-    for col, base in ((c1, "logo1"), (c3, "logo2"), (c5, "logo3")):
-        found = None
-        for ext in ("png","jpg","jpeg","gif"):
-            path = f"{base}.{ext}"
-            if os.path.exists(path):
-                found = path
-                break
-        if found:
-            try:
-                img = Image.open(found).resize((LOGO_WIDTH, LOGO_HEIGHT))
-                col.image(img)
-            except Exception as e:
-                col.error(f"Lỗi đọc {found}: {e}")
-        else:
-            col.warning(f"Thiếu {base}.(png/jpg/jpeg/gif)")
+    """Allow user file uploads, check for errors, and display logos."""
+    uploaded_file = st.file_uploader("Upload your logo", type=SUPPORTED_FORMATS)
+
+    if uploaded_file is not None:
+        try:
+            # Check file size
+            uploaded_file.seek(0, os.SEEK_END)
+            file_size_mb = uploaded_file.tell() / (1024 * 1024)  # Convert to MB
+            uploaded_file.seek(0)  # Reset file pointer for reading
+            if file_size_mb > MAX_FILE_SIZE_MB:
+                st.error(f"File size exceeds the limit of {MAX_FILE_SIZE_MB} MB.")
+                return
+
+            # Open and validate image
+            img = Image.open(uploaded_file)
+            img = img.resize((LOGO_WIDTH, LOGO_HEIGHT))
+
+            # Display image
+            st.image(img, caption=f"Uploaded: {uploaded_file.name}")
+
+        except UnidentifiedImageError:
+            st.error("The uploaded file is not a valid image.")
+        except Exception as e:
+            st.error(f"An unexpected error occurred: {e}")
+    else:
+        st.warning("Please upload a file to continue.")
 
 # ------------ Thiết lập Google Sheets ------------
 SCOPE = ["https://www.googleapis.com/auth/spreadsheets",
